@@ -1,422 +1,287 @@
 package net.blay09.mods.waystones;
 
-import net.minecraftforge.common.config.Configuration;
+import net.xiaoyu233.fml.FishModLoader;
 
-import cpw.mods.fml.common.network.ByteBufUtils;
-import io.netty.buffer.ByteBuf;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.util.Properties;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
 
-// TODO: Clean up this mess
+public final class WaystoneConfig {
+    private static final File FILE = new File(FishModLoader.CONFIG_DIR, "waystones.properties");
+    private static final Properties VALUES = new Properties();
 
-// Static fields are not synced from the server, non-static are
-public class WaystoneConfig {
+    public static boolean interDimension = true;
+    public static boolean globalInterDimension = true;
+    public static boolean particles = true;
+    public static boolean sounds = true;
+    public static boolean disableTeleportSound = false;
+    public static boolean disableTextGlow = false;
+    public static boolean allowReturnScrolls = true;
+    public static boolean lootReturnScrolls = true;
+    public static boolean allowWarpStone = true;
+    public static boolean creativeModeOnly = false;
+    public static boolean invulnerableWaystones = false;
+    public static boolean setSpawnPoint = false;
+    public static boolean globalNoCooldown = false;
+    public static boolean teleportButton = false;
+    public static boolean teleportButtonReturnOnly = false;
+    public static boolean showNametag = false;
+    public static boolean menusPauseGame = false;
+    public static boolean enableWorldgen = true;
+    public static boolean villageNamesCompat = true;
+    public static boolean showCooldownOnWaystone = true;
+    public static boolean flatInventoryIcon = false;
+    public static boolean disableWaystoneDrops = false;
+    public static boolean debugMode = false;
+    public static boolean journeyMapWaypoints = true;
+    public static boolean journeyMapWaypointRandomColor = true;
+    public static String journeyMapWaypointColor = "7FDBFF";
+    public static int journeyMapWaypointYOffset = 2;
+    public static boolean xaeroMinimapWaypoints = true;
+    public static boolean xaeroMinimapWaypointRandomColor = true;
+    public static int xaeroMinimapWaypointColor = 11;
+    public static int xaeroMinimapWaypointYOffset = 2;
+    public static int teleportButtonCooldownSeconds = 300;
+    public static int teleportButtonX = 60;
+    public static int teleportButtonY = 60;
+    public static int warpStoneCooldownSeconds = 300;
+    public static int xpBaseCost = 5;
+    public static int xpBlocksPerLevel = 100;
+    public static int xpCrossDimCost = 5;
+    public static int sortingMode = 0;
+    public static float waystoneLightLevel = 0.5F;
+    public static String[] overlayClipBounds = {
+            "variant=stone;lower=-22;upper=-44",
+            "variant=sandstone;lower=-22;upper=-38",
+            "variant=mossy;lower=-24;upper=-44",
+            "variant=stonebrick;lower=-26;upper=-44",
+            "variant=mossy_stonebrick;lower=-26;upper=-44",
+            "variant=nether;lower=-24;upper=-44",
+            "variant=end;lower=-24;upper=-42"
+    };
+    public static String[] sandyWaystonePathBlocks = {"minecraft:sandstone"};
+    public static String[] mossyWaystonePathBlocks = {};
+    public static String[] structureWaystoneRules = {
+            "structure=village;chance=1;type=auto",
+            "structure=temple_desert;chance=1;type=sandy",
+            "structure=temple_jungle;chance=1;type=auto",
+            "structure=stronghold;chance=1;type=auto",
+            "structure=fortress;chance=1;type=nether",
+            "structure=end_spike;chance=1;type=end",
+            "structure=world_spawn;chance=1;type=stone;dimensionWhitelist=0"
+    };
 
-    private static Configuration config;
-
-    public static boolean debugMode;
-    public static int teleportButtonX;
-    public static int teleportButtonY;
-    public static boolean disableParticles;
-    public static boolean disableTeleportSound;
-
-    public boolean teleportButton;
-    public int teleportButtonCooldown;
-    public boolean teleportButtonReturnOnly;
-    public static boolean showCooldownOnWaystone;
-
-    public boolean allowReturnScrolls;
-    public boolean lootReturnScrolls;
-    public boolean allowWarpStone;
-
-    public int warpStoneCooldown;
-
-    public boolean interDimension;
-
-    public boolean invulnerableWaystones;
-
-    public boolean creativeModeOnly;
-    public boolean setSpawnPoint;
-
-    public boolean globalNoCooldown;
-    public boolean globalInterDimension;
-
-    public static boolean showNametag;
-    public boolean enableWorldgen;
-    public boolean villageNamesCompat;
-
-    public int xpBaseCost;
-    public int xpBlocksPerLevel;
-    public int xpCrossDimCost;
-
-    public static boolean menusPauseGame;
-
-    public static int sortingMode;
-    public static boolean flatInventoryIcon;
-    public static String[] overlayClipBounds;
-    public static boolean journeyMapWaypoints;
-    public static boolean journeyMapWaypointRandomColor;
-    public static String journeyMapWaypointColor;
-    public static int journeyMapWaypointYOffset;
-    public static boolean xaeroMinimapWaypoints;
-    public static boolean xaeroMinimapWaypointRandomColor;
-    public static int xaeroMinimapWaypointColor;
-    public static int xaeroMinimapWaypointYOffset;
-
-    public float waystoneLightLevel;
-    public boolean disableWaystoneDrops;
-    public String[] sandyWaystonePathBlocks;
-    public String[] mossyWaystonePathBlocks;
-    public String[] structureWaystoneRules;
-
-    public static class Categories {
-
-        public static final String general = "general";
-        public static final String client = "client";
-        public static final String journeyMap = "journeymap";
-        public static final String worldgen = "worldgen";
-        public static final String xaeroMinimap = "xaerominimap";
+    private WaystoneConfig() {
     }
 
-    public void reloadLocal(Configuration config) {
-        debugMode = config.getBoolean("debugMode", Categories.general, false, "Additional logs");
-        teleportButton = config.getBoolean(
-            "teleportButton",
-            Categories.general,
-            false,
-            "Should there be a button in the inventory to access the waystone menu?");
-        teleportButtonCooldown = config.getInt(
-            "teleportButtonCooldown",
-            Categories.general,
-            300,
-            0,
-            86400,
-            "The cooldown between usages of the teleport button in seconds.");
-        teleportButtonReturnOnly = config.getBoolean(
-            "teleportButtonReturnOnly",
-            Categories.general,
-            false,
-            "If true, the teleport button will only let you return to the last activated waystone, instead of allowing to choose.");
+    public static void load() {
+        VALUES.clear();
+        if (FILE.isFile()) {
+            try (FileInputStream input = new FileInputStream(FILE)) {
+                VALUES.load(input);
+            } catch (IOException exception) {
+                Waystones.LOGGER.error("Failed to read {}", FILE, exception);
+            }
+        }
 
-        allowReturnScrolls = config
-            .getBoolean("allowReturnScrolls", Categories.general, true, "If true, return scrolls will be craftable.");
-        lootReturnScrolls = config.getBoolean(
-            "Spawn Return Scrolls as loot",
-            Categories.general,
-            true,
-            "If true, return scrolls will be found in dungeons as loot.");
-        allowWarpStone = config
-            .getBoolean("allowWarpStone", Categories.general, true, "If true, the warp stone will be craftable.");
+        interDimension = booleanValue(VALUES, "interDimension", interDimension);
+        globalInterDimension = booleanValue(VALUES, "globalInterDimension", globalInterDimension);
+        particles = booleanValue(VALUES, "particles", particles);
+        if (VALUES.containsKey("disableParticles")) {
+            particles = !booleanValue(VALUES, "disableParticles", false);
+        }
+        sounds = booleanValue(VALUES, "sounds", sounds);
+        disableTeleportSound = booleanValue(VALUES, "disableTeleportSound", disableTeleportSound);
+        disableTextGlow = booleanValue(VALUES, "disableTextGlow", disableTextGlow);
+        allowReturnScrolls = booleanValue(VALUES, "allowReturnScrolls", allowReturnScrolls);
+        lootReturnScrolls = booleanValue(VALUES, "lootReturnScrolls", lootReturnScrolls);
+        allowWarpStone = booleanValue(VALUES, "allowWarpStone", allowWarpStone);
+        creativeModeOnly = booleanValue(VALUES, "creativeModeOnly", creativeModeOnly);
+        invulnerableWaystones = booleanValue(VALUES, "invulnerableWaystones", invulnerableWaystones);
+        setSpawnPoint = booleanValue(VALUES, "setSpawnPoint", setSpawnPoint);
+        globalNoCooldown = booleanValue(VALUES, "globalNoCooldown", globalNoCooldown);
+        teleportButton = booleanValue(VALUES, "teleportButton", teleportButton);
+        teleportButtonReturnOnly = booleanValue(VALUES, "teleportButtonReturnOnly", teleportButtonReturnOnly);
+        showNametag = booleanValue(VALUES, "showNametag", showNametag);
+        menusPauseGame = booleanValue(VALUES, "menusPauseGame", menusPauseGame);
+        enableWorldgen = booleanValue(VALUES, "enableWorldgen", enableWorldgen);
+        villageNamesCompat = booleanValue(VALUES, "villageNamesCompat", villageNamesCompat);
+        showCooldownOnWaystone = booleanValue(VALUES, "showCooldownOnWaystone", showCooldownOnWaystone);
+        flatInventoryIcon = booleanValue(VALUES, "flatInventoryIcon", flatInventoryIcon);
+        disableWaystoneDrops = booleanValue(VALUES, "disableWaystoneDrops", disableWaystoneDrops);
+        debugMode = booleanValue(VALUES, "debugMode", debugMode);
+        journeyMapWaypoints = booleanValue(VALUES, "journeyMapWaypoints", journeyMapWaypoints);
+        journeyMapWaypointRandomColor = booleanValue(VALUES, "journeyMapWaypointRandomColor", journeyMapWaypointRandomColor);
+        journeyMapWaypointColor = VALUES.getProperty("journeyMapWaypointColor", journeyMapWaypointColor);
+        journeyMapWaypointYOffset = integerValue(VALUES, "journeyMapWaypointYOffset", journeyMapWaypointYOffset,
+                Integer.MIN_VALUE, Integer.MAX_VALUE);
+        xaeroMinimapWaypoints = booleanValue(VALUES, "xaeroMinimapWaypoints", xaeroMinimapWaypoints);
+        xaeroMinimapWaypointRandomColor = booleanValue(VALUES, "xaeroMinimapWaypointRandomColor", xaeroMinimapWaypointRandomColor);
+        xaeroMinimapWaypointColor = integerValue(VALUES, "xaeroMinimapWaypointColor", xaeroMinimapWaypointColor, 0, 15);
+        xaeroMinimapWaypointYOffset = integerValue(VALUES, "xaeroMinimapWaypointYOffset", xaeroMinimapWaypointYOffset,
+                Integer.MIN_VALUE, Integer.MAX_VALUE);
+        teleportButtonCooldownSeconds = integerValue(VALUES, "teleportButtonCooldownSeconds",
+                teleportButtonCooldownSeconds, 0, 86_400);
+        teleportButtonX = integerValue(VALUES, "teleportButtonX", teleportButtonX, -250, 250);
+        teleportButtonY = integerValue(VALUES, "teleportButtonY", teleportButtonY, -250, 250);
+        warpStoneCooldownSeconds = integerValue(VALUES, "warpStoneCooldownSeconds",
+                warpStoneCooldownSeconds, 0, 86_400);
+        xpBaseCost = integerValue(VALUES, "xpBaseCost", xpBaseCost, -1, Integer.MAX_VALUE);
+        xpBlocksPerLevel = integerValue(VALUES, "xpBlocksPerLevel", xpBlocksPerLevel, 0, Integer.MAX_VALUE);
+        xpCrossDimCost = integerValue(VALUES, "xpCrossDimCost", xpCrossDimCost, 0, Integer.MAX_VALUE);
+        sortingMode = integerValue(VALUES, "sortingMode", sortingMode, 0, 1);
+        waystoneLightLevel = floatValue(VALUES, "waystoneLightLevel", waystoneLightLevel, 0.0F, 1.0F);
+        overlayClipBounds = stringArrayValue(VALUES, "overlayClipBounds", overlayClipBounds);
+        sandyWaystonePathBlocks = stringArrayValueAllowEmpty(VALUES,
+                "sandyWaystonePathBlocks", sandyWaystonePathBlocks);
+        mossyWaystonePathBlocks = stringArrayValueAllowEmpty(VALUES,
+                "mossyWaystonePathBlocks", mossyWaystonePathBlocks);
+        structureWaystoneRules = stringArrayValue(VALUES, "structureWaystoneRules", structureWaystoneRules);
 
-        teleportButtonX = config.getInt(
-            "teleportButtonX",
-            Categories.client,
-            60,
-            -100,
-            250,
-            "The x position of the warp button in the inventory.");
-        teleportButtonY = config.getInt(
-            "teleportButtonY",
-            Categories.client,
-            60,
-            -100,
-            250,
-            "The y position of the warp button in the inventory.");
-        disableParticles = config.getBoolean(
-            "disableParticles",
-            Categories.client,
-            false,
-            "If true, activated waystones will not emit particles.");
-        disableTeleportSound = config.getBoolean(
-            "disableTeleportSound",
-            Categories.client,
-            false,
-            "If true, waystone teleports will not play the teleport sound.");
-        menusPauseGame = config.getBoolean(
-            "menusPauseGame",
-            Categories.client,
-            false,
-            "If true, GUI menus pause the game in singleplayer.");
-
-        warpStoneCooldown = config.getInt(
-            "warpStoneCooldown",
-            Categories.general,
-            300,
-            0,
-            86400,
-            "The cooldown between usages of the Warp Stone and Waystone in seconds.");
-
-        setSpawnPoint = config.getBoolean(
-            "setSpawnPoint",
-            Categories.general,
-            false,
-            "If true, the player's spawnpoint will be set to the last activated waystone.");
-        interDimension = config
-            .getBoolean("interDimension", Categories.general, true, "If true, all waystones work inter-dimensionally.");
-
-        invulnerableWaystones = config.getBoolean(
-            "Invulnerable Waystones",
-            Categories.general,
-            false,
-            "If true, a waystone is invulnerable to all but the player who named them.");
-
-        creativeModeOnly = config.getBoolean(
-            "creativeModeOnly",
-            Categories.general,
-            false,
-            "If true, waystones can only be placed in creative mode.");
-
-        globalNoCooldown = config.getBoolean(
-            "globalNoCooldown",
-            Categories.general,
-            false,
-            "If true, waystones marked as global have no cooldown.");
-        globalInterDimension = config.getBoolean(
-            "globalInterDimension",
-            Categories.general,
-            true,
-            "If true, waystones marked as global work inter-dimensionally.");
-
-        showNametag = config.getBoolean(
-            "showNametag",
-            Categories.client,
-            false,
-            "If true, show a floating nametag with the Waystone's name, above it.");
-
-        enableWorldgen = config
-            .getBoolean("enableWorldgen", Categories.worldgen, true, "If true, generate a Waystone in each village.");
-
-        villageNamesCompat = config.getBoolean(
-            "villageNamesCompat",
-            Categories.worldgen,
-            true,
-            "If true, village Waystones will take their name from Village Names.");
-
-        xpBaseCost = config.getInt(
-            "xpBaseCost",
-            Categories.general,
-            5,
-            -1,
-            Integer.MAX_VALUE,
-            "The minimum amount of XP levels consumed when using a Waystone. Set to -1 to disable cost altogether.");
-
-        xpBlocksPerLevel = config.getInt(
-            "xpBlocksPerLevel",
-            Categories.general,
-            100,
-            0,
-            Integer.MAX_VALUE,
-            "Each how many blocks consume one XP level.");
-
-        xpCrossDimCost = config.getInt(
-            "xpCrossDimCost",
-            Categories.general,
-            5,
-            0,
-            Integer.MAX_VALUE,
-            "How many XP levels are consumed for teleporting to another dimension.");
-
-        sortingMode = config.getInt(
-            "sortingMode",
-            Categories.client,
-            0,
-            0,
-            1,
-            "The Waystone sorting mode. Alphabetical: 0, Distance: 1.");
-
-        flatInventoryIcon = config.getBoolean(
-            "flatInventoryIcon",
-            Categories.client,
-            false,
-            "If true, render waystones as 2D icons in the inventory instead of 3D models.");
-
-        // Formula to calculate those:
-        // Upper:
-        // Take the Y of the first pixel row of the overlay, multiply by 2, substract 66
-        // Lower:
-        // Take the Y of the last pixel row of the overlay, multiply by 2, substract 66
-        overlayClipBounds = config.getStringList(
-            "overlayClipBounds",
-            Categories.client,
-            new String[] { "variant=stone;lower=-22;upper=-44", "variant=sandstone;lower=-22;upper=-38",
-                "variant=mossy;lower=-24;upper=-44", "variant=stonebrick;lower=-26;upper=-44",
-                "variant=mossy_stonebrick;lower=-26;upper=-44", "variant=nether;lower=-24;upper=-44",
-                "variant=end;lower=-24;upper=-42" },
-            "Per-variant overlay clip bounds in model pixel units. "
-                + "Controls the lower and upper Y extents of the glow overlay on the pillar. "
-                + "Format: variant=<name>;lower=<Y>;upper=<Y>");
-
-        showCooldownOnWaystone = config.getBoolean(
-            "showCooldownOnWaystone",
-            Categories.client,
-            true,
-            "If true, Waystone glow texture will display the cooldown status.");
-
-        journeyMapWaypoints = config.getBoolean(
-            "journeyMapWaypoints",
-            Categories.journeyMap,
-            true,
-            "If true, activating a Waystone adds or updates a JourneyMap waypoint for it.");
-        journeyMapWaypointRandomColor = config.getBoolean(
-            "journeyMapWaypointRandomColor",
-            Categories.journeyMap,
-            true,
-            "If true, JourneyMap waypoint colors are derived from the Waystone name instead of using the fixed color.");
-        journeyMapWaypointColor = config.getString(
-            "journeyMapWaypointColor",
-            Categories.journeyMap,
-            "7FDBFF",
-            "Fixed JourneyMap waypoint color as a hex RGB value. Accepts values like 7FDBFF or #7FDBFF.");
-        journeyMapWaypointYOffset = config.getInt(
-            "journeyMapWaypointYOffset",
-            Categories.journeyMap,
-            2,
-            Integer.MIN_VALUE,
-            Integer.MAX_VALUE,
-            "Vertical offset applied to JourneyMap waypoints relative to the Waystone base block.");
-        xaeroMinimapWaypoints = config.getBoolean(
-            "xaeroMinimapWaypoints",
-            Categories.xaeroMinimap,
-            true,
-            "If true, activating a Waystone adds or updates a Xaero's Minimap waypoint for it.");
-        xaeroMinimapWaypointRandomColor = config.getBoolean(
-            "xaeroMinimapWaypointRandomColor",
-            Categories.xaeroMinimap,
-            true,
-            "If true, Xaero's Minimap waypoint colors are derived from the Waystone name instead of using the fixed color.");
-        xaeroMinimapWaypointColor = config.getInt(
-            "xaeroMinimapWaypointColor",
-            Categories.xaeroMinimap,
-            11,
-            0,
-            15,
-            "Fixed Xaero's Minimap waypoint color index. Uses Xaero's 0-15 color palette.");
-        xaeroMinimapWaypointYOffset = config.getInt(
-            "xaeroMinimapWaypointYOffset",
-            Categories.xaeroMinimap,
-            2,
-            Integer.MIN_VALUE,
-            Integer.MAX_VALUE,
-            "Vertical offset applied to Xaero's Minimap waypoints relative to the Waystone base block.");
-
-        waystoneLightLevel = config.getFloat(
-            "waystoneLightLevel",
-            Categories.general,
-            0.5f,
-            0f,
-            1f,
-            "Light level emitted by waystones. 0 = none, 1 = maximum.");
-
-        disableWaystoneDrops = config.getBoolean(
-            "disableWaystoneDrops",
-            Categories.general,
-            false,
-            "If true, waystones will not drop as an item when mined (including Silk Touch).");
-
-        sandyWaystonePathBlocks = config.getStringList(
-            "sandyWaystonePathBlocks",
-            Categories.worldgen,
-            new String[] { "minecraft:sandstone" },
-            "List of path/surface blocks that should make village-generated Waystones use the sandy variant.");
-        mossyWaystonePathBlocks = config.getStringList(
-            "mossyWaystonePathBlocks",
-            Categories.worldgen,
-            new String[] {},
-            "List of path/surface blocks that should make village-generated Waystones use the mossy variant.");
-        structureWaystoneRules = config.getStringList(
-            "structureWaystoneRules",
-            Categories.worldgen,
-            new String[] { "structure=village;chance=1;type=auto", "structure=temple_desert;chance=1;type=sandy",
-                "structure=temple_jungle;chance=1;type=auto", "structure=stronghold;chance=1;type=auto",
-                "structure=fortress;chance=1;type=nether", "structure=end_spike;chance=1;type=end",
-                "structure=world_spawn;chance=1;type=stone;dimensionWhitelist=0" },
-            "How waystones generate in structures. One rule per structure id. "
-                + "Format: structure=<id>;chance=<0..1>;type=<auto|stone|sandy|mossy|stonebrick|mossystonebrick|nether|end>;"
-                + "name=<override>;forceGlobal=<true|false>;autoActivateGlobal=<true|false>;"
-                + "dimensionWhitelist=<*|0,-1,1>;biomeWhitelist=<*|2,17,21>");
+        VALUES.setProperty("interDimension", Boolean.toString(interDimension));
+        VALUES.setProperty("globalInterDimension", Boolean.toString(globalInterDimension));
+        VALUES.setProperty("particles", Boolean.toString(particles));
+        VALUES.setProperty("disableParticles", Boolean.toString(!particles));
+        VALUES.setProperty("sounds", Boolean.toString(sounds));
+        VALUES.setProperty("disableTeleportSound", Boolean.toString(disableTeleportSound));
+        VALUES.setProperty("disableTextGlow", Boolean.toString(disableTextGlow));
+        VALUES.setProperty("allowReturnScrolls", Boolean.toString(allowReturnScrolls));
+        VALUES.setProperty("lootReturnScrolls", Boolean.toString(lootReturnScrolls));
+        VALUES.setProperty("allowWarpStone", Boolean.toString(allowWarpStone));
+        VALUES.setProperty("creativeModeOnly", Boolean.toString(creativeModeOnly));
+        VALUES.setProperty("invulnerableWaystones", Boolean.toString(invulnerableWaystones));
+        VALUES.setProperty("setSpawnPoint", Boolean.toString(setSpawnPoint));
+        VALUES.setProperty("globalNoCooldown", Boolean.toString(globalNoCooldown));
+        VALUES.setProperty("teleportButton", Boolean.toString(teleportButton));
+        VALUES.setProperty("teleportButtonReturnOnly", Boolean.toString(teleportButtonReturnOnly));
+        VALUES.setProperty("showNametag", Boolean.toString(showNametag));
+        VALUES.setProperty("menusPauseGame", Boolean.toString(menusPauseGame));
+        VALUES.setProperty("flatInventoryIcon", Boolean.toString(flatInventoryIcon));
+        VALUES.setProperty("enableWorldgen", Boolean.toString(enableWorldgen));
+        VALUES.setProperty("villageNamesCompat", Boolean.toString(villageNamesCompat));
+        VALUES.setProperty("showCooldownOnWaystone", Boolean.toString(showCooldownOnWaystone));
+        VALUES.setProperty("flatInventoryIcon", Boolean.toString(flatInventoryIcon));
+        VALUES.setProperty("disableWaystoneDrops", Boolean.toString(disableWaystoneDrops));
+        VALUES.setProperty("debugMode", Boolean.toString(debugMode));
+        VALUES.setProperty("journeyMapWaypoints", Boolean.toString(journeyMapWaypoints));
+        VALUES.setProperty("journeyMapWaypointRandomColor", Boolean.toString(journeyMapWaypointRandomColor));
+        VALUES.setProperty("journeyMapWaypointColor", journeyMapWaypointColor);
+        VALUES.setProperty("journeyMapWaypointYOffset", Integer.toString(journeyMapWaypointYOffset));
+        VALUES.setProperty("xaeroMinimapWaypoints", Boolean.toString(xaeroMinimapWaypoints));
+        VALUES.setProperty("xaeroMinimapWaypointRandomColor", Boolean.toString(xaeroMinimapWaypointRandomColor));
+        VALUES.setProperty("xaeroMinimapWaypointColor", Integer.toString(xaeroMinimapWaypointColor));
+        VALUES.setProperty("xaeroMinimapWaypointYOffset", Integer.toString(xaeroMinimapWaypointYOffset));
+        VALUES.setProperty("teleportButtonCooldownSeconds", Integer.toString(teleportButtonCooldownSeconds));
+        VALUES.setProperty("teleportButtonX", Integer.toString(teleportButtonX));
+        VALUES.setProperty("teleportButtonY", Integer.toString(teleportButtonY));
+        VALUES.setProperty("warpStoneCooldownSeconds", Integer.toString(warpStoneCooldownSeconds));
+        VALUES.setProperty("xpBaseCost", Integer.toString(xpBaseCost));
+        VALUES.setProperty("xpBlocksPerLevel", Integer.toString(xpBlocksPerLevel));
+        VALUES.setProperty("xpCrossDimCost", Integer.toString(xpCrossDimCost));
+        VALUES.setProperty("sortingMode", Integer.toString(sortingMode));
+        VALUES.setProperty("waystoneLightLevel", Float.toString(waystoneLightLevel));
+        VALUES.setProperty("overlayClipBounds", String.join("|", overlayClipBounds));
+        VALUES.setProperty("sandyWaystonePathBlocks", String.join("|", sandyWaystonePathBlocks));
+        VALUES.setProperty("mossyWaystonePathBlocks", String.join("|", mossyWaystonePathBlocks));
+        VALUES.setProperty("structureWaystoneRules", String.join("|", structureWaystoneRules));
+        VALUES.putIfAbsent("Server Waystones", "");
+        save();
     }
 
-    public static WaystoneConfig read(ByteBuf buf) {
-        WaystoneConfig config = new WaystoneConfig();
-        config.teleportButton = buf.readBoolean();
-        config.teleportButtonCooldown = buf.readInt();
-        config.teleportButtonReturnOnly = buf.readBoolean();
-        config.warpStoneCooldown = buf.readInt();
-        config.interDimension = buf.readBoolean();
-        config.globalInterDimension = buf.readBoolean();
-        config.creativeModeOnly = buf.readBoolean();
-        config.setSpawnPoint = buf.readBoolean();
-        config.enableWorldgen = buf.readBoolean();
-        config.villageNamesCompat = buf.readBoolean();
-        config.xpBaseCost = buf.readInt();
-        config.xpBlocksPerLevel = buf.readInt();
-        config.xpCrossDimCost = buf.readInt();
-        config.allowReturnScrolls = buf.readBoolean();
-        config.lootReturnScrolls = buf.readBoolean();
-        config.allowWarpStone = buf.readBoolean();
-        config.globalNoCooldown = buf.readBoolean();
-        config.waystoneLightLevel = buf.readFloat();
-        config.disableWaystoneDrops = buf.readBoolean();
-        config.invulnerableWaystones = buf.readBoolean();
-        int sandyPathBlockCount = buf.readInt();
-        config.sandyWaystonePathBlocks = new String[sandyPathBlockCount];
-        for (int i = 0; i < sandyPathBlockCount; i++) {
-            config.sandyWaystonePathBlocks[i] = ByteBufUtils.readUTF8String(buf);
+    public static synchronized List<WaystoneEntry> configuredGlobalWaystones() {
+        List<WaystoneEntry> result = new ArrayList<>();
+        String raw = VALUES.getProperty("Server Waystones", "");
+        if (raw.isEmpty()) {
+            return result;
         }
-        int mossyPathBlockCount = buf.readInt();
-        config.mossyWaystonePathBlocks = new String[mossyPathBlockCount];
-        for (int i = 0; i < mossyPathBlockCount; i++) {
-            config.mossyWaystonePathBlocks[i] = ByteBufUtils.readUTF8String(buf);
+        for (String encoded : raw.split("\\n")) {
+            String[] parts = encoded.split("\\u00a7", 3);
+            if (parts.length != 3) {
+                continue;
+            }
+            String[] position = parts[2].split(",", 3);
+            if (position.length != 3) {
+                continue;
+            }
+            try {
+                result.add(new WaystoneEntry(parts[0], Integer.parseInt(parts[1]),
+                        Integer.parseInt(position[0]), Integer.parseInt(position[1]),
+                        Integer.parseInt(position[2]), true));
+            } catch (NumberFormatException ignored) {
+            }
         }
-        int structureRuleCount = buf.readInt();
-        config.structureWaystoneRules = new String[structureRuleCount];
-        for (int i = 0; i < structureRuleCount; i++) {
-            config.structureWaystoneRules[i] = ByteBufUtils.readUTF8String(buf);
-        }
-        return config;
+        return result;
     }
 
-    public void write(ByteBuf buf) {
-        buf.writeBoolean(teleportButton);
-        buf.writeInt(teleportButtonCooldown);
-        buf.writeBoolean(teleportButtonReturnOnly);
-        buf.writeInt(warpStoneCooldown);
-        buf.writeBoolean(interDimension);
-        buf.writeBoolean(globalInterDimension);
-        buf.writeBoolean(creativeModeOnly);
-        buf.writeBoolean(setSpawnPoint);
-        buf.writeBoolean(enableWorldgen);
-        buf.writeBoolean(villageNamesCompat);
-        buf.writeInt(xpBaseCost);
-        buf.writeInt(xpBlocksPerLevel);
-        buf.writeInt(xpCrossDimCost);
-        buf.writeBoolean(allowReturnScrolls);
-        buf.writeBoolean(lootReturnScrolls);
-        buf.writeBoolean(allowWarpStone);
-        buf.writeBoolean(globalNoCooldown);
-        buf.writeFloat(waystoneLightLevel);
-        buf.writeBoolean(disableWaystoneDrops);
-        buf.writeBoolean(invulnerableWaystones);
-        String[] sandyBlocks = sandyWaystonePathBlocks != null ? sandyWaystonePathBlocks : new String[0];
-        buf.writeInt(sandyBlocks.length);
-        for (String sandyPathBlock : sandyBlocks) {
-            ByteBufUtils.writeUTF8String(buf, sandyPathBlock);
+    public static synchronized void storeGlobalWaystones(Collection<WaystoneEntry> entries) {
+        List<String> encoded = new ArrayList<>();
+        for (WaystoneEntry entry : entries) {
+            encoded.add(entry.name() + "\u00a7" + entry.dimension() + "\u00a7"
+                    + entry.x() + "," + entry.y() + "," + entry.z());
         }
-        String[] mossyBlocks = mossyWaystonePathBlocks != null ? mossyWaystonePathBlocks : new String[0];
-        buf.writeInt(mossyBlocks.length);
-        for (String mossyPathBlock : mossyBlocks) {
-            ByteBufUtils.writeUTF8String(buf, mossyPathBlock);
+        VALUES.setProperty("Server Waystones", String.join("\n", encoded));
+        save();
+    }
+
+    private static synchronized void save() {
+        File parent = FILE.getParentFile();
+        if (parent != null) {
+            parent.mkdirs();
         }
-        String[] structureRules = structureWaystoneRules != null ? structureWaystoneRules : new String[0];
-        buf.writeInt(structureRules.length);
-        for (String structureRule : structureRules) {
-            ByteBufUtils.writeUTF8String(buf, structureRule);
+        try (FileOutputStream output = new FileOutputStream(FILE)) {
+            VALUES.store(output, "Waystones-MITE configuration");
+        } catch (IOException exception) {
+            Waystones.LOGGER.error("Failed to write {}", FILE, exception);
         }
     }
 
-    public static Configuration getRawConfig() {
-        return config;
+    public static void saveCurrent() {
+        VALUES.setProperty("sortingMode", Integer.toString(sortingMode));
+        VALUES.setProperty("showNametag", Boolean.toString(showNametag));
+        VALUES.setProperty("particles", Boolean.toString(particles));
+        VALUES.setProperty("disableParticles", Boolean.toString(!particles));
+        VALUES.setProperty("sounds", Boolean.toString(sounds));
+        VALUES.setProperty("disableTeleportSound", Boolean.toString(disableTeleportSound));
+        VALUES.setProperty("showCooldownOnWaystone", Boolean.toString(showCooldownOnWaystone));
+        VALUES.setProperty("menusPauseGame", Boolean.toString(menusPauseGame));
+        save();
     }
 
-    public static void setConfig(Configuration config) {
-        WaystoneConfig.config = config;
+    private static boolean booleanValue(Properties values, String key, boolean fallback) {
+        String value = values.getProperty(key);
+        return value == null ? fallback : Boolean.parseBoolean(value);
+    }
+
+    private static int integerValue(Properties values, String key, int fallback, int min, int max) {
+        try {
+            int value = Integer.parseInt(values.getProperty(key, Integer.toString(fallback)));
+            return Math.max(min, Math.min(max, value));
+        } catch (NumberFormatException ignored) {
+            return fallback;
+        }
+    }
+
+    private static float floatValue(Properties values, String key, float fallback, float min, float max) {
+        try {
+            float value = Float.parseFloat(values.getProperty(key, Float.toString(fallback)));
+            return Math.max(min, Math.min(max, value));
+        } catch (NumberFormatException ignored) {
+            return fallback;
+        }
+    }
+
+    private static String[] stringArrayValue(Properties values, String key, String[] fallback) {
+        String value = values.getProperty(key);
+        return value == null || value.isBlank() ? fallback : value.split("\\|");
+    }
+
+    private static String[] stringArrayValueAllowEmpty(Properties values, String key, String[] fallback) {
+        String value = values.getProperty(key);
+        return value == null ? fallback : value.isBlank() ? new String[0] : value.split("\\|");
     }
 }

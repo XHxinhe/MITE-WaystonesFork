@@ -1,0 +1,17 @@
+pluginManagement {
+	repositories {
+		maven {
+			name = 'ModdedMITE'
+			url = 'https://maven.limingzxc.top/repository/maven-public/'
+		}
+		mavenLocal()
+		maven {
+			name = 'Fabric'
+			url = 'https://maven.fabricmc.net/'
+		}
+		mavenCentral()
+		gradlePluginPortal()
+	}
+}
+
+rootProject.name = 'Waystones-MITE'

@@ -1,90 +1,68 @@
 package net.blay09.mods.waystones.client.resource;
 
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import net.minecraft.MetadataSection;
+import net.minecraft.MetadataSerializer;
+import net.minecraft.ResourceLocation;
+import net.minecraft.ResourcePack;
+
+import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
-import java.io.BufferedReader;
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.Set;
 
-import javax.imageio.ImageIO;
-
-import net.minecraft.client.resources.IResourcePack;
-import net.minecraft.client.resources.data.IMetadataSection;
-import net.minecraft.client.resources.data.IMetadataSerializer;
-import net.minecraft.util.ResourceLocation;
-
-import org.apache.commons.io.IOUtils;
-
-import com.google.common.base.Charsets;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
-
-public class WaystonesAlternateResourcePack implements IResourcePack {
-
-    private static final String PACK_NAME = "Waystones Modernity Textures";
+public final class WaystonesAlternateResourcePack implements ResourcePack {
+    public static final String PACK_NAME = "Waystones Modernity Textures";
     private static final String PREFIX = "/waystones_modernity/";
-    private static final String PACK_META_JSON = "{" + "\"pack\":{"
-        + "\"description\":\"Modernity textures for Waystones-X, by DarkBum\","
-        + "\"pack_format\":1"
-        + "}"
-        + "}";
+    private static final String PACK_META = "{\"pack\":{\"description\":"
+            + "\"Modernity textures for Waystones-X, by DarkBum\",\"pack_format\":1}}";
 
-    private String locationToName(ResourceLocation loc) {
-        return String.format("assets/%s/%s", loc.getResourceDomain(), loc.getResourcePath());
+    @Override
+    public InputStream getInputStream(ResourceLocation location) {
+        return getClass().getResourceAsStream(PREFIX + path(location));
     }
 
     @Override
-    public InputStream getInputStream(ResourceLocation loc) throws IOException {
-        String path = PREFIX + locationToName(loc);
-        InputStream is = getClass().getResourceAsStream(path);
-        if (is == null) {
-            throw new IOException("Resource not found: " + loc);
-        }
-        return is;
+    public boolean resourceExists(ResourceLocation location) {
+        return getClass().getResource(PREFIX + path(location)) != null;
     }
 
     @Override
-    public boolean resourceExists(ResourceLocation loc) {
-        String path = PREFIX + locationToName(loc);
-        return getClass().getResource(path) != null;
-    }
-
-    @Override
-    public Set<String> getResourceDomains() {
+    public Set getResourceDomains() {
         return Collections.singleton("waystones");
     }
 
     @Override
-    public IMetadataSection getPackMetadata(IMetadataSerializer serializer, String section) throws IOException {
-        InputStream is = new ByteArrayInputStream(PACK_META_JSON.getBytes(Charsets.UTF_8));
-        BufferedReader reader = null;
-        try {
-            reader = new BufferedReader(new InputStreamReader(is, Charsets.UTF_8));
-            JsonObject json = new JsonParser().parse(reader)
-                .getAsJsonObject();
-            return serializer.parseMetadataSection(section, json);
-        } finally {
-            IOUtils.closeQuietly(reader);
-        }
+    public MetadataSection getPackMetadata(MetadataSerializer serializer, String section) {
+        JsonObject json = JsonParser.parseString(PACK_META).getAsJsonObject();
+        return serializer.parseMetadataSection(section, json);
     }
 
     @Override
-    public BufferedImage getPackImage() throws IOException {
-        InputStream is = getClass().getResourceAsStream(PREFIX + "pack.png");
-        if (is == null) {
-            is = getClass().getResourceAsStream("/assets/waystones/modernity_pack_logo.png");
+    public BufferedImage getPackImage() {
+        try (InputStream input = getClass().getResourceAsStream(PREFIX + "pack.png")) {
+            if (input != null) {
+                return ImageIO.read(input);
+            }
+        } catch (Exception ignored) {
         }
-        if (is == null) {
-            throw new IOException("No pack image found");
+        try (InputStream input = getClass().getResourceAsStream("/assets/waystones/modernity_pack_logo.png")) {
+            return input == null ? null : ImageIO.read(input);
+        } catch (Exception ignored) {
+            return null;
         }
-        return ImageIO.read(is);
     }
 
     @Override
     public String getPackName() {
         return PACK_NAME;
+    }
+
+    private static String path(ResourceLocation location) {
+        return "assets/" + location.getResourceDomain() + "/" + location.getResourcePath();
     }
 }

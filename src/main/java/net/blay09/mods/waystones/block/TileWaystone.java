@@ -1,17 +1,11 @@
 package net.blay09.mods.waystones.block;
 
-import net.blay09.mods.waystones.Waystones;
-import net.minecraft.block.Block;
-import net.minecraft.nbt.NBTTagCompound;
-import net.minecraft.network.NetworkManager;
-import net.minecraft.network.Packet;
-import net.minecraft.network.play.server.S35PacketUpdateTileEntity;
-import net.minecraft.tileentity.TileEntity;
-import net.minecraft.util.AxisAlignedBB;
-import net.minecraft.world.EnumSkyBlock;
+import net.minecraft.NBTTagCompound;
+import net.minecraft.Packet;
+import net.minecraft.Packet132TileEntityData;
+import net.minecraft.TileEntity;
 
-public class TileWaystone extends TileEntity {
-
+public final class TileWaystone extends TileEntity {
     public static final int VARIANT_STONE = 0;
     public static final int VARIANT_SANDSTONE = 1;
     public static final int VARIANT_MOSSY = 2;
@@ -20,135 +14,120 @@ public class TileWaystone extends TileEntity {
     public static final int VARIANT_END = 5;
     public static final int VARIANT_MOSSY_STONEBRICK = 6;
 
+    private static int descriptionPacketType = -1;
+
     private String waystoneName = "";
     private String waystoneOwner = "";
-    private int dummyInventoryVariant = VARIANT_STONE;
+    private int facing;
+    private boolean upperPart;
+    private boolean global;
     private boolean forceGlobalOnActivation;
-    private static int warpGeneration = 0;
-    private transient int lastSeenWarpGeneration = 0;
-    private transient int lastLightValue = -1;
-    private transient int lightUpdateTimer = 0;
 
-    public static void notifyWarpOccurred() {
-        warpGeneration++;
+    @Override
+    public void writeToNBT(NBTTagCompound tag) {
+        super.writeToNBT(tag);
+        tag.setString("WaystoneName", waystoneName);
+        tag.setString("WaystoneOwner", waystoneOwner);
+        tag.setInteger("Facing", facing);
+        tag.setBoolean("UpperPart", upperPart);
+        tag.setBoolean("Global", global);
+        tag.setBoolean("ForceGlobalOnActivation", forceGlobalOnActivation);
     }
 
     @Override
-    public void updateEntity() {
-        if (!worldObj.isRemote) return;
-
-        if (warpGeneration != lastSeenWarpGeneration) {
-            lastSeenWarpGeneration = warpGeneration;
-            lightUpdateTimer = 0;
-        }
-
-        if (--lightUpdateTimer > 0) return;
-
-        int maxLight = (int) (Waystones.getConfig().waystoneLightLevel * 15f);
-        int currentLight = getBlockType().getLightValue(worldObj, xCoord, yCoord, zCoord);
-
-        if (currentLight != lastLightValue) {
-            lastLightValue = currentLight;
-            worldObj.updateLightByType(EnumSkyBlock.Block, xCoord, yCoord, zCoord);
-            worldObj.updateLightByType(EnumSkyBlock.Block, xCoord, yCoord + 1, zCoord);
-        }
-
-        // Fast ticks while charging, stop when full (warp notification restarts)
-        lightUpdateTimer = (currentLight >= maxLight) ? Integer.MAX_VALUE : 4;
-    }
-
-    @Override
-    public void writeToNBT(NBTTagCompound tagCompound) {
-        super.writeToNBT(tagCompound);
-        tagCompound.setString("WaystoneName", waystoneName);
-        tagCompound.setString("WaystoneOwner", waystoneOwner);
-        tagCompound.setBoolean("ForceGlobalOnActivation", forceGlobalOnActivation);
-    }
-
-    @Override
-    public void readFromNBT(NBTTagCompound tagCompound) {
-        super.readFromNBT(tagCompound);
-        waystoneName = tagCompound.getString("WaystoneName");
-        waystoneOwner = tagCompound.getString("WaystoneOwner");
-        forceGlobalOnActivation = tagCompound.getBoolean("ForceGlobalOnActivation");
-    }
-
-    @Override
-    public void onDataPacket(NetworkManager net, S35PacketUpdateTileEntity pkt) {
-        super.onDataPacket(net, pkt);
-        readFromNBT(pkt.func_148857_g());
+    public void readFromNBT(NBTTagCompound tag) {
+        super.readFromNBT(tag);
+        waystoneName = tag.getString("WaystoneName");
+        waystoneOwner = tag.getString("WaystoneOwner");
+        facing = tag.getInteger("Facing");
+        upperPart = tag.getBoolean("UpperPart");
+        global = tag.getBoolean("Global");
+        forceGlobalOnActivation = tag.getBoolean("ForceGlobalOnActivation");
     }
 
     @Override
     public Packet getDescriptionPacket() {
-        NBTTagCompound tagCompound = new NBTTagCompound();
-        writeToNBT(tagCompound);
-        return new S35PacketUpdateTileEntity(xCoord, yCoord, zCoord, 0, tagCompound);
+        if (descriptionPacketType < 0) {
+            return null;
+        }
+        NBTTagCompound tag = new NBTTagCompound();
+        writeToNBT(tag);
+        return new Packet132TileEntityData(xCoord, yCoord, zCoord, descriptionPacketType, tag);
+    }
+
+    public static void setDescriptionPacketType(int type) {
+        descriptionPacketType = type;
     }
 
     public String getWaystoneName() {
         return waystoneName;
     }
 
-    public void setWaystoneName(String waystoneName) {
-        this.waystoneName = waystoneName;
-        worldObj.markBlockForUpdate(xCoord, yCoord, zCoord);
-        markDirty();
+    public void setWaystoneName(String name) {
+        waystoneName = name == null ? "" : name.trim();
+        onInventoryChanged();
+        if (worldObj != null) {
+            worldObj.markBlockForUpdate(xCoord, yCoord, zCoord);
+        }
     }
 
     public String getWaystoneOwner() {
         return waystoneOwner;
     }
 
-    public void setWaystoneOwner(String waystoneOwner) {
-        this.waystoneOwner = waystoneOwner;
-        worldObj.markBlockForUpdate(xCoord, yCoord, zCoord);
-        markDirty();
+    public void setWaystoneOwner(String owner) {
+        waystoneOwner = owner == null ? "" : owner;
+        onInventoryChanged();
+        sync();
     }
 
     public int getVariant() {
-        if (worldObj != null) {
-            Block block = worldObj.getBlock(xCoord, yCoord, zCoord);
-            if (block instanceof BlockWaystone) {
-                return ((BlockWaystone) block).getDefaultVariant();
-            }
-        }
-        return dummyInventoryVariant;
+        return getBlockType() instanceof BlockWaystone block ? block.getVariant() : VARIANT_STONE;
     }
 
-    public void setDummyInventoryVariant(int variant) {
-        dummyInventoryVariant = normalizeVariant(variant);
+    public int getFacing() {
+        return facing;
     }
 
-    private static int normalizeVariant(int variant) {
-        switch (variant) {
-            case VARIANT_SANDSTONE:
-            case VARIANT_MOSSY:
-            case VARIANT_STONEBRICK:
-            case VARIANT_NETHER:
-            case VARIANT_END:
-            case VARIANT_MOSSY_STONEBRICK:
-                return variant;
-            default:
-                return VARIANT_STONE;
-        }
+    public void setFacing(int facing) {
+        this.facing = facing & 3;
+        onInventoryChanged();
+        sync();
+    }
+
+    public boolean isUpperPart() {
+        return upperPart;
+    }
+
+    public void setUpperPart(boolean upperPart) {
+        this.upperPart = upperPart;
+        onInventoryChanged();
+        sync();
+    }
+
+    public boolean isGlobal() {
+        return global;
+    }
+
+    public void setGlobal(boolean global) {
+        this.global = global;
+        onInventoryChanged();
+        sync();
     }
 
     public boolean shouldForceGlobalOnActivation() {
         return forceGlobalOnActivation;
     }
 
-    public void setForceGlobalOnActivation(boolean forceGlobalOnActivation) {
-        this.forceGlobalOnActivation = forceGlobalOnActivation;
+    public void setForceGlobalOnActivation(boolean value) {
+        forceGlobalOnActivation = value;
+        onInventoryChanged();
+        sync();
+    }
+
+    private void sync() {
         if (worldObj != null) {
             worldObj.markBlockForUpdate(xCoord, yCoord, zCoord);
         }
-        markDirty();
     }
-
-    @Override
-    public AxisAlignedBB getRenderBoundingBox() {
-        return AxisAlignedBB.getBoundingBox(xCoord, yCoord, zCoord, xCoord + 1, yCoord + 2, zCoord + 1);
-    }
-
 }

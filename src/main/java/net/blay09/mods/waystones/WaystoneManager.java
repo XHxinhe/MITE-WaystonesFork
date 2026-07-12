@@ -1,413 +1,264 @@
 package net.blay09.mods.waystones;
 
-import java.util.Collection;
+import net.blay09.mods.waystones.block.TileWaystone;
+import net.minecraft.EntityPlayer;
+import net.minecraft.ItemStack;
+import net.minecraft.Potion;
+import net.minecraft.PotionEffect;
+import net.minecraft.TileEntity;
+import net.minecraft.WorldServer;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.ServerPlayer;
+import moddedmite.rustedironcore.network.Network;
+import net.blay09.mods.waystones.network.S2COpenReturnConfirm;
+import net.blay09.mods.waystones.network.S2CTeleportEffect;
+import net.blay09.mods.waystones.network.S2CWaystoneList;
+import net.blay09.mods.waystones.network.S2CWaystoneState;
+import net.blay09.mods.waystones.network.S2CMapWaypoint;
+
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import net.blay09.mods.waystones.block.BlockWaystone;
-import net.blay09.mods.waystones.block.TileWaystone;
-import net.blay09.mods.waystones.network.NetworkHandler;
-import net.blay09.mods.waystones.network.message.MessageJourneyMapWaypoint;
-import net.blay09.mods.waystones.network.message.MessageTeleportEffect;
-import net.blay09.mods.waystones.network.message.MessageWaystones;
-import net.blay09.mods.waystones.util.BlockPos;
-import net.blay09.mods.waystones.util.TeleporterNoPortalSeekBlock;
-import net.blay09.mods.waystones.util.WaystoneEntry;
-import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.entity.player.EntityPlayerMP;
-import net.minecraft.nbt.NBTTagCompound;
-import net.minecraft.nbt.NBTTagList;
-import net.minecraft.potion.Potion;
-import net.minecraft.potion.PotionEffect;
-import net.minecraft.server.MinecraftServer;
-import net.minecraft.tileentity.TileEntity;
-import net.minecraft.util.AxisAlignedBB;
-import net.minecraft.util.ChatComponentTranslation;
-import net.minecraft.util.EnumChatFormatting;
-import net.minecraft.world.World;
-import net.minecraftforge.common.util.Constants;
-import net.minecraftforge.common.util.ForgeDirection;
+public final class WaystoneManager {
+    private static final long RETURN_CONFIRM_TIMEOUT_MS = 15_000L;
+    private static final long MENU_TIMEOUT_MS = 30_000L;
+    private static final Map<String, PendingReturn> PENDING_RETURNS = new HashMap<>();
+    private static final Map<String, PendingMenu> PENDING_MENUS = new HashMap<>();
 
-import com.google.common.collect.Maps;
-
-import cpw.mods.fml.common.network.NetworkRegistry;
-
-public class WaystoneManager {
-
-    private static final Map<String, WaystoneEntry> serverWaystones = Maps.newHashMap();
-    private static final Map<String, WaystoneEntry> knownWaystones = Maps.newHashMap();
-
-    public static boolean playerActivatedWaystone(EntityPlayer player, TileWaystone waystone) {
-        WaystoneEntry target = new WaystoneEntry(waystone);
-
-        NBTTagCompound tagCompound = PlayerWaystoneData.getWaystonesTag(player);
-        NBTTagList tagList = tagCompound.getTagList(PlayerWaystoneData.WAYSTONE_LIST, Constants.NBT.TAG_COMPOUND);
-        for (int i = 0; i < tagList.tagCount(); i++) {
-            WaystoneEntry entry = WaystoneEntry.read(tagList.getCompoundTagAt(i));
-            if (entry.equals(target)) {
-                return true;
-            }
-        }
-
-        for (WaystoneEntry entry : getServerWaystones()) {
-            if (entry.equals(target)) {
-                return true;
-            }
-        }
-
-        return false;
+    private WaystoneManager() {
     }
 
-    public static boolean playerKnowsAboutWaystone(EntityPlayer player, WaystoneEntry waystoneEntry) {
-        if (waystoneEntry.isGlobal()) {
-            return true;
-        }
-        boolean playerKnewAboutWaystone = false;
-        WaystoneEntry[] entries = PlayerWaystoneData.fromPlayer(player)
-            .getWaystones();
-        for (WaystoneEntry entry : entries) {
-            if (entry.equals(waystoneEntry)) {
-                playerKnewAboutWaystone = true;
-                break;
-            }
-        }
-        return playerKnewAboutWaystone;
-    }
-
-    public static void activateWaystone(EntityPlayer player, TileWaystone waystone) {
-        if (waystone.shouldForceGlobalOnActivation() && !waystone.getWaystoneName()
-            .isEmpty()) {
-            addServerWaystone(new WaystoneEntry(waystone));
-            waystone.setForceGlobalOnActivation(false);
-        }
-
-        WaystoneEntry serverWaystone = getServerWaystone(waystone.getWaystoneName());
-        if (serverWaystone != null) {
-            PlayerWaystoneData.setLastServerWaystone(player, serverWaystone);
-            sendPlayerWaystones(player);
-            sendJourneyMapWaypoint(player, waystone);
-            if (!playerKnowsAboutWaystone(player, serverWaystone)) {
-                BlockWaystone.sendActivationChatMessage(player, waystone);
-            }
-            return;
-        }
-        serverWaystone = new WaystoneEntry(waystone);
-        PlayerWaystoneData.resetLastServerWaystone(player);
-        boolean playerKnows = playerKnowsAboutWaystone(player, serverWaystone);
-        removePlayerWaystone(player, serverWaystone);
-        addPlayerWaystone(player, waystone);
-        sendPlayerWaystones(player);
-        sendJourneyMapWaypoint(player, waystone);
-        if (!playerKnows) {
-            BlockWaystone.sendActivationChatMessage(player, waystone);
-        }
-    }
-
-    private static void sendJourneyMapWaypoint(EntityPlayer player, TileWaystone waystone) {
-        if (player instanceof EntityPlayerMP && waystone.getWorldObj() != null) {
-            NetworkHandler.channel.sendTo(
-                new MessageJourneyMapWaypoint(
-                    waystone.getWaystoneName(),
-                    waystone.getWorldObj().provider.dimensionId,
-                    new BlockPos(waystone)),
-                (EntityPlayerMP) player);
-        }
-    }
-
-    public static void sendPlayerWaystones(EntityPlayer player) {
-        if (player instanceof EntityPlayerMP) {
-            PlayerWaystoneData waystoneData = PlayerWaystoneData.fromPlayer(player);
-            NetworkHandler.channel.sendTo(
-                new MessageWaystones(
-                    waystoneData.getWaystones(),
-                    getServerWaystones().toArray(new WaystoneEntry[getServerWaystones().size()]),
-                    waystoneData.getLastServerWaystoneName(),
-                    waystoneData.getLastFreeWarp(),
-                    waystoneData.getLastWarpStoneUse(),
-                    waystoneData.getPinnedWaystones()),
-                (EntityPlayerMP) player);
-        }
-    }
-
-    public static void addPlayerWaystone(EntityPlayer player, TileWaystone waystone) {
-        NBTTagCompound tagCompound = PlayerWaystoneData.getOrCreateWaystonesTag(player);
-        NBTTagList tagList = tagCompound.getTagList(PlayerWaystoneData.WAYSTONE_LIST, Constants.NBT.TAG_COMPOUND);
-        tagList.appendTag(new WaystoneEntry(waystone).writeToNBT());
-        tagCompound.setTag(PlayerWaystoneData.WAYSTONE_LIST, tagList);
-    }
-
-    public static boolean removePlayerWaystone(EntityPlayer player, WaystoneEntry waystone) {
-        NBTTagCompound tagCompound = PlayerWaystoneData.getWaystonesTag(player);
-        NBTTagList tagList = tagCompound.getTagList(PlayerWaystoneData.WAYSTONE_LIST, Constants.NBT.TAG_COMPOUND);
-        for (int i = 0; i < tagList.tagCount(); i++) {
-            NBTTagCompound entryCompound = tagList.getCompoundTagAt(i);
-            if (WaystoneEntry.read(entryCompound)
-                .equals(waystone)) {
-                tagList.removeTag(i);
-                return true;
-            }
-        }
-        return false;
-    }
-
-    public static boolean checkAndUpdateWaystone(EntityPlayer player, WaystoneEntry waystone) {
-        WaystoneEntry serverEntry = getServerWaystone(waystone.getName());
-        if (serverEntry != null) {
-            if (getWaystoneInWorld(serverEntry) == null) {
-                removeServerWaystone(serverEntry);
-                PlayerWaystoneData.setWaystonePinned(player, waystone, false);
-                return false;
-            }
-            if (removePlayerWaystone(player, waystone)) {
-                sendPlayerWaystones(player);
-            }
-            return true;
-        }
-        NBTTagCompound tagCompound = PlayerWaystoneData.getWaystonesTag(player);
-        NBTTagList tagList = tagCompound.getTagList(PlayerWaystoneData.WAYSTONE_LIST, Constants.NBT.TAG_COMPOUND);
-        for (int i = 0; i < tagList.tagCount(); i++) {
-            NBTTagCompound entryCompound = tagList.getCompoundTagAt(i);
-            if (WaystoneEntry.read(entryCompound)
-                .equals(waystone)) {
-                TileWaystone tileEntity = getWaystoneInWorld(waystone);
-                if (tileEntity != null) {
-                    if (!entryCompound.getString("Name")
-                        .equals(tileEntity.getWaystoneName())) {
-                        entryCompound.setString("Name", tileEntity.getWaystoneName());
-                        sendPlayerWaystones(player);
-                    }
-                    return true;
-                } else {
-                    removePlayerWaystone(player, waystone);
-                    PlayerWaystoneData.setWaystonePinned(player, waystone, false);
-                    sendPlayerWaystones(player);
-                }
-                return false;
-            }
-        }
-        return false;
-    }
-
-    public static TileWaystone getWaystoneInWorld(WaystoneEntry waystone) {
-        World targetWorld = MinecraftServer.getServer()
-            .worldServerForDimension(waystone.getDimensionId());
-        int x = waystone.getPos()
-            .getX();
-        int y = waystone.getPos()
-            .getY();
-        int z = waystone.getPos()
-            .getZ();
-        if (!targetWorld.blockExists(x, y, z)) {
-            targetWorld.getChunkProvider()
-                .loadChunk(x >> 4, z >> 4);
-        }
-        TileEntity tileEntity = targetWorld.getTileEntity(
-            waystone.getPos()
-                .getX(),
-            waystone.getPos()
-                .getY(),
-            waystone.getPos()
-                .getZ());
-        if (tileEntity instanceof TileWaystone) {
-            Waystones.debug("getWaystoneInWorld found waystone " + ((TileWaystone) tileEntity).getWaystoneName());
-            return (TileWaystone) tileEntity;
-        }
-        Waystones.debug("getWaystoneInWorld didnt find waystone");
-        return null;
-    }
-
-    public static boolean isDimensionWarpAllowed(WaystoneEntry waystone) {
-        return waystone.isGlobal() ? Waystones.getConfig().globalInterDimension : Waystones.getConfig().interDimension;
-    }
-
-    public static WaystoneEntry resolveWarpTarget(EntityPlayer player, WaystoneEntry waystone) {
-        if (waystone == null) {
-            return null;
-        }
-
-        WaystoneEntry serverEntry = getServerWaystone(waystone.getName());
-        if (serverEntry != null) {
-            return serverEntry;
-        }
-
-        WaystoneEntry[] playerEntries = PlayerWaystoneData.fromPlayer(player)
-            .getWaystones();
-        for (WaystoneEntry entry : playerEntries) {
-            if (entry.equals(waystone)) {
-                return entry;
-            }
-        }
-
-        return null;
-    }
-
-    public static boolean teleportToWaystone(EntityPlayer player, WaystoneEntry waystone) {
-        if (!checkAndUpdateWaystone(player, waystone)) {
-            ChatComponentTranslation chatComponent = new ChatComponentTranslation("waystones:waystoneBroken");
-            chatComponent.getChatStyle()
-                .setColor(EnumChatFormatting.RED);
-            player.addChatComponentMessage(chatComponent);
+    public static boolean teleport(EntityPlayer player, WaystoneEntry requested) {
+        WaystoneEntry allowed = findAccessible(player, requested);
+        if (allowed == null) {
+            WaystoneMessages.send(player, "message.waystones.not_activated");
             return false;
         }
 
-        WaystoneEntry resolvedWaystone = resolveWarpTarget(player, waystone);
-        if (resolvedWaystone == null) {
-            ChatComponentTranslation chatComponent = new ChatComponentTranslation("waystones:waystoneBroken");
-            chatComponent.getChatStyle()
-                .setColor(EnumChatFormatting.RED);
-            player.addChatComponentMessage(chatComponent);
+        MinecraftServer server = MinecraftServer.getServer();
+        boolean dimensionWarp = player.dimension != allowed.dimension();
+        boolean dimensionAllowed = allowed.global()
+                ? WaystoneConfig.globalInterDimension : WaystoneConfig.interDimension;
+        if (dimensionWarp && !dimensionAllowed) {
+            WaystoneMessages.send(player, "message.waystones.interdimensional_disabled");
+            return false;
+        }
+        WorldServer targetWorld = server.worldServerForDimension(allowed.dimension());
+        targetWorld.getChunkProvider().loadChunk(allowed.x() >> 4, allowed.z() >> 4);
+        TileEntity tile = targetWorld.getBlockTileEntity(allowed.x(), allowed.y(), allowed.z());
+        if (!(tile instanceof TileWaystone waystone)) {
+            if (allowed.global()) {
+                GlobalWaystoneData.get(server).remove(allowed);
+            } else {
+                PlayerWaystoneData.remove(player, allowed);
+            }
+            if (player instanceof ServerPlayer serverPlayer) {
+                sendPlayerState(serverPlayer);
+            }
+            WaystoneMessages.send(player, "message.waystones.missing");
             return false;
         }
 
-        World targetWorld = MinecraftServer.getServer()
-            .worldServerForDimension(resolvedWaystone.getDimensionId());
-        int x = resolvedWaystone.getPos()
-            .getX();
-        int y = resolvedWaystone.getPos()
-            .getY();
-        int z = resolvedWaystone.getPos()
-            .getZ();
-        ForgeDirection facing = ForgeDirection.getOrientation(targetWorld.getBlockMetadata(x, y, z));
-        BlockPos targetPos = getSafeTeleportPosition(targetWorld, player, resolvedWaystone.getPos(), facing);
-        boolean dimensionWarp = resolvedWaystone.getDimensionId() != player.getEntityWorld().provider.dimensionId;
-        if (!player.capabilities.isCreativeMode && dimensionWarp && !isDimensionWarpAllowed(resolvedWaystone)) {
-            player.addChatComponentMessage(new ChatComponentTranslation("waystones:noDimensionWarp"));
-            return false;
+        WaystoneEntry current = new WaystoneEntry(waystone);
+        PlayerWaystoneData.activate(player, current);
+        if (player instanceof ServerPlayer serverPlayer) {
+            sendPlayerState(serverPlayer);
+            sendMapWaypoint(serverPlayer, current);
         }
-
-        sendTeleportEffect(player.worldObj, new BlockPos(player), false);
-        player.addPotionEffect(new PotionEffect(Potion.blindness.getId(), 20, 3));
-        if (dimensionWarp) {
-            MinecraftServer.getServer()
-                .getConfigurationManager()
-                .transferPlayerToDimension(
-                    (EntityPlayerMP) player,
-                    resolvedWaystone.getDimensionId(),
-                    new TeleporterNoPortalSeekBlock(
-                        net.minecraftforge.common.DimensionManager.getWorld(resolvedWaystone.getDimensionId())));
+        Network.sendToAllPlayers(new S2CTeleportEffect(
+                player.dimension, player.posX, player.posY, player.posZ));
+        player.addPotionEffect(new PotionEffect(Potion.blindness.id, 20, 3));
+        if (player.dimension != current.dimension()) {
+            WaystoneTeleportContext.runWithoutPortal(player, () -> player.travelToDimension(current.dimension()));
         }
-        player.rotationYaw = getRotationYaw(facing);
-        player.setPositionAndUpdate(targetPos.getX() + 0.5, targetPos.getY(), targetPos.getZ() + 0.5);
-        sendTeleportEffect(player.worldObj, targetPos, true);
+        ExitPosition exit = findExitPosition(waystone);
+        player.rotationYaw = yawForFacing(exit.facing());
+        player.setPositionAndUpdate(exit.x() + 0.5D, exit.y() + 0.1D, exit.z() + 0.5D);
+        player.fallDistance = 0.0F;
+        Network.sendToAllPlayers(new S2CTeleportEffect(
+                current.dimension(), exit.x() + 0.5D, exit.y() + 0.1D, exit.z() + 0.5D));
         return true;
     }
 
-    private static BlockPos getSafeTeleportPosition(World world, EntityPlayer player, BlockPos waystonePos,
-        ForgeDirection preferredFacing) {
-        BlockPos preferred = waystonePos.offset(preferredFacing);
-        if (canStandWithoutColliding(world, player, preferred)) {
-            return preferred;
+    public static List<WaystoneEntry> getAccessibleWaystones(EntityPlayer player) {
+        List<WaystoneEntry> result = new ArrayList<>(PlayerWaystoneData.getWaystones(player));
+        for (WaystoneEntry global : GlobalWaystoneData.get(MinecraftServer.getServer()).entries()) {
+            result.removeIf(entry -> entry.samePosition(global));
+            result.add(global.asGlobal(true));
         }
+        return result;
+    }
 
-        ForgeDirection[] sides = new ForgeDirection[] { ForgeDirection.NORTH, ForgeDirection.SOUTH, ForgeDirection.WEST,
-            ForgeDirection.EAST };
-        for (ForgeDirection side : sides) {
-            if (side == preferredFacing) {
-                continue;
-            }
-            BlockPos candidate = waystonePos.offset(side);
-            if (canStandWithoutColliding(world, player, candidate)) {
-                return candidate;
+    public static WaystoneEntry findAccessible(EntityPlayer player, WaystoneEntry requested) {
+        for (WaystoneEntry entry : getAccessibleWaystones(player)) {
+            if (entry.samePosition(requested)) {
+                return entry;
             }
         }
-
-        return preferred;
+        return null;
     }
 
-    private static boolean canStandWithoutColliding(World world, EntityPlayer player, BlockPos pos) {
-        double x = pos.getX() + 0.5;
-        double y = pos.getY();
-        double z = pos.getZ() + 0.5;
-        AxisAlignedBB bb = AxisAlignedBB.getBoundingBox(
-            x - player.width / 2.0,
-            y,
-            z - player.width / 2.0,
-            x + player.width / 2.0,
-            y + player.height,
-            z + player.width / 2.0);
-        List<?> collisions = world.getCollidingBoundingBoxes(player, bb);
-        return collisions == null || collisions.isEmpty();
+    public static boolean bypassesWarpStoneCooldown(EntityPlayer player, WaystoneEntry requested) {
+        WaystoneEntry allowed = findAccessible(player, requested);
+        return allowed != null && allowed.global() && WaystoneConfig.globalNoCooldown;
     }
 
-    public static void sendTeleportEffect(World world, BlockPos pos, boolean playSound) {
-        NetworkHandler.channel.sendToAllAround(
-            new MessageTeleportEffect(pos, playSound),
-            new NetworkRegistry.TargetPoint(world.provider.dimensionId, pos.getX(), pos.getY(), pos.getZ(), 64));
+    public static boolean hasCooldownFreeGlobalWaystone(EntityPlayer player) {
+        return WaystoneConfig.globalNoCooldown
+                && getAccessibleWaystones(player).stream().anyMatch(WaystoneEntry::global);
     }
 
-    public static float getRotationYaw(ForgeDirection facing) {
-        switch (facing) {
-            case NORTH:
-                return 180f;
-            case SOUTH:
-                return 0f;
-            case WEST:
-                return 90f;
-            case EAST:
-                return -90f;
+    public static long warpStoneCooldownMs() {
+        return WaystoneConfig.warpStoneCooldownSeconds * 1000L;
+    }
+
+    public static void requestReturnConfirmation(ServerPlayer player, boolean consumeScroll, boolean freeWarp) {
+        WaystoneEntry target = PlayerWaystoneData.getLast(player);
+        if (target == null) {
+            WaystoneMessages.send(player, "message.waystones.none_activated");
+            return;
         }
-        return 0f;
+        PENDING_RETURNS.put(player.getEntityName(),
+                new PendingReturn(target, System.currentTimeMillis(), consumeScroll, freeWarp));
+        Network.sendToClient(player, new S2COpenReturnConfirm(target));
     }
 
-    public static void addServerWaystone(WaystoneEntry entry) {
-        entry.setGlobal(true);
-        serverWaystones.put(entry.getName(), entry);
-        GlobalWaystoneData.save(
-            MinecraftServer.getServer()
-                .getEntityWorld());
+    public static void openDestinationMenu(ServerPlayer player, boolean warpStone, boolean freeWarp) {
+        openDestinationMenu(player, warpStone, freeWarp, null);
     }
 
-    public static void removeServerWaystone(WaystoneEntry entry) {
-        serverWaystones.remove(entry.getName());
-        GlobalWaystoneData.save(
-            MinecraftServer.getServer()
-                .getEntityWorld());
+    public static void openDestinationMenu(ServerPlayer player, boolean warpStone, boolean freeWarp,
+                                           WaystoneEntry origin) {
+        PENDING_MENUS.put(player.getEntityName(),
+                new PendingMenu(warpStone, freeWarp, origin, System.currentTimeMillis()));
+        Network.sendToClient(player,
+                new S2CWaystoneList(getAccessibleWaystones(player), warpStone, freeWarp, origin));
     }
 
-    public static void setServerWaystones(WaystoneEntry[] entries) {
-        serverWaystones.clear();
-        for (WaystoneEntry entry : entries) {
-            entry.setGlobal(true);
-            serverWaystones.put(entry.getName(), entry);
+    public static MenuAuthorization consumeMenuAuthorization(EntityPlayer player, boolean warpStone, boolean freeWarp) {
+        PendingMenu pending = PENDING_MENUS.remove(player.getEntityName());
+        boolean valid = pending != null
+                && System.currentTimeMillis() - pending.createdAt() <= MENU_TIMEOUT_MS
+                && pending.warpStone() == warpStone
+                && pending.freeWarp() == freeWarp;
+        return valid ? new MenuAuthorization(pending.origin()) : null;
+    }
+
+    public static void confirmReturn(EntityPlayer player) {
+        PendingReturn pending = PENDING_RETURNS.remove(player.getEntityName());
+        if (pending == null || System.currentTimeMillis() - pending.createdAt() > RETURN_CONFIRM_TIMEOUT_MS) {
+            return;
+        }
+        ItemStack held = player.getHeldItemStack();
+        WaystoneEntry currentTarget = PlayerWaystoneData.getLast(player);
+        if ((pending.consumeScroll() && (held == null || held.getItem() != WaystoneContent.RETURN_SCROLL))
+                || currentTarget == null || !currentTarget.samePosition(pending.target())) {
+            return;
+        }
+        if (pending.freeWarp() && !player.inCreativeMode()) {
+            long elapsed = System.currentTimeMillis() - PlayerWaystoneData.getLastFreeWarpUse(player);
+            if (elapsed < freeWarpCooldownMs()) {
+                return;
+            }
+        }
+        boolean teleported = teleport(player, pending.target());
+        if (teleported && pending.freeWarp()) {
+            PlayerWaystoneData.setLastFreeWarpUse(player, System.currentTimeMillis());
+        }
+        if (teleported && pending.consumeScroll() && !player.inCreativeMode()) {
+            if (--held.stackSize <= 0) {
+                player.setHeldItemStack(null);
+            }
+        }
+        if (teleported && player instanceof ServerPlayer serverPlayer) {
+            sendPlayerState(serverPlayer);
         }
     }
 
-    public static void setKnownWaystones(WaystoneEntry[] entries) {
-        knownWaystones.clear();
-        for (WaystoneEntry entry : entries) {
-            knownWaystones.put(entry.getName(), entry);
+    public static long freeWarpCooldownMs() {
+        return WaystoneConfig.teleportButtonCooldownSeconds * 1000L;
+    }
+
+    public static int offsetX(int facing) {
+        return switch (facing & 3) {
+            case 1 -> -1;
+            case 3 -> 1;
+            default -> 0;
+        };
+    }
+
+    public static int offsetZ(int facing) {
+        return switch (facing & 3) {
+            case 0 -> 1;
+            case 2 -> -1;
+            default -> 0;
+        };
+    }
+
+    public static float yawForFacing(int facing) {
+        return switch (facing & 3) {
+            case 0 -> 0.0F;
+            case 1 -> 90.0F;
+            case 2 -> 180.0F;
+            default -> -90.0F;
+        };
+    }
+
+    private static ExitPosition findExitPosition(TileWaystone waystone) {
+        int preferred = waystone.getFacing() & 3;
+        int[] directions = {preferred, (preferred + 1) & 3, (preferred + 3) & 3, (preferred + 2) & 3};
+        for (int distance : new int[]{2, 1}) {
+            for (int direction : directions) {
+                int x = waystone.xCoord + offsetX(direction) * distance;
+                int y = waystone.yCoord;
+                int z = waystone.zCoord + offsetZ(direction) * distance;
+                if (waystone.getWorldObj().isAirOrPassableBlock(x, y, z, true)
+                        && waystone.getWorldObj().isAirOrPassableBlock(x, y + 1, z, true)) {
+                    return new ExitPosition(x, y, z, direction);
+                }
+            }
+        }
+        return new ExitPosition(waystone.xCoord + offsetX(preferred), waystone.yCoord,
+                waystone.zCoord + offsetZ(preferred), preferred);
+    }
+
+    public static void sendPlayerState(ServerPlayer player) {
+        Network.sendToClient(player, new S2CWaystoneState(
+                getAccessibleWaystones(player), PlayerWaystoneData.getLast(player),
+                PlayerWaystoneData.getLastFreeWarpUse(player),
+                PlayerWaystoneData.getLastWarpStoneUse(player),
+                PlayerWaystoneData.getPinnedNames(player)));
+    }
+
+    public static void sendMapWaypoint(ServerPlayer player, WaystoneEntry entry) {
+        Network.sendToClient(player, new S2CMapWaypoint("", entry.name(), entry.dimension(),
+                entry.x(), entry.y(), entry.z()));
+    }
+
+    @SuppressWarnings("unchecked")
+    public static void sendAllPlayerStates() {
+        MinecraftServer server = MinecraftServer.getServer();
+        if (server == null || server.getConfigurationManager() == null) {
+            return;
+        }
+        for (Object player : server.getConfigurationManager().playerEntityList) {
+            if (player instanceof ServerPlayer serverPlayer) {
+                sendPlayerState(serverPlayer);
+            }
         }
     }
 
-    public static WaystoneEntry getKnownWaystone(String name) {
-        return knownWaystones.get(name);
+    private record PendingReturn(WaystoneEntry target, long createdAt, boolean consumeScroll, boolean freeWarp) {
     }
 
-    public static Collection<WaystoneEntry> getServerWaystones() {
-        return serverWaystones.values();
+    private record PendingMenu(boolean warpStone, boolean freeWarp, WaystoneEntry origin, long createdAt) {
     }
 
-    public static WaystoneEntry getServerWaystone(String name) {
-        return serverWaystones.get(name);
+    public record MenuAuthorization(WaystoneEntry origin) {
     }
 
-    public static Collection<WaystoneEntry> getKnownWaystones() {
-        return knownWaystones.values();
-    }
-
-    public static void removeKnownWaystone(String name) {
-        knownWaystones.remove(name);
-    }
-
-    public static void addKnownWaystone(WaystoneEntry entry) {
-        knownWaystones.put(entry.getName(), entry);
-    }
-
-    public static void removeServerWaystoneByName(String name) {
-        serverWaystones.remove(name);
-    }
-
-    public static void addServerWaystoneDirectly(WaystoneEntry entry) {
-        serverWaystones.put(entry.getName(), entry);
+    private record ExitPosition(int x, int y, int z, int facing) {
     }
 }

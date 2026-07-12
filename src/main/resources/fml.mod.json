@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "id": "waystones",
+  "version": "${version}",
+  "depends": {
+    "fishmodloader": ">=3.4.0",
+    "minecraft": "1.6.4-mite",
+    "java": ">=17",
+    "rusted_iron_core": ">=1.5.0"
+  },
+  "suggests": {
+    "waila": ">=2.0.6"
+  },
+  "environment": "*",
+  "name": "MITE-WaystonesFork",
+  "description": "Teleport back to activated waystones. For Survival, Adventure or Servers.",
+  "authors": [
+    "BlayTheNinth",
+    "jack",
+    "XHxinhe"
+  ],
+  "contributors": [
+    "JoeCreates",
+    "DarkBum"
+  ],
+  "contact": {
+    "homepage": "https://github.com/JackOfNoneTrades/WaystonesFork"
+  },
+  "custom": {
+    "credits": "Developed by BlayTheNinth. Includes item icons by @JoeCreates released under CC-BY-SA 3.0. New textures by DarkBum."
+  },
+  "entrypoints": {
+    "main": [
+      "net.blay09.mods.waystones.Waystones"
+    ]
+  },
+  "mixins": [
+    "waystones.mixins.json"
+  ],
+  "license": "LGPL-3.0-only"
+}

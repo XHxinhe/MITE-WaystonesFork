@@ -1,71 +1,50 @@
 package net.blay09.mods.waystones.client.render;
 
-import net.minecraft.client.model.ModelBase;
-import net.minecraft.client.model.ModelRenderer;
+import net.minecraft.ModelBase;
+import net.minecraft.ModelRenderer;
 
-public class ModelWaystone extends ModelBase {
+public final class ModelWaystone extends ModelBase {
+    private final ModelRenderer top;
+    private final ModelRenderer topMidTop;
+    private final ModelRenderer topMidBottom;
+    private final ModelRenderer topBottom;
+    private final ModelRenderer pillar;
+    private final ModelRenderer baseTop;
+    private final ModelRenderer baseMid;
+    private final ModelRenderer baseBottom;
 
-    private ModelRenderer top;
-    private ModelRenderer topMidTop;
-    private ModelRenderer pillar;
-    private ModelRenderer topBottom;
-    private ModelRenderer baseTop;
-    private ModelRenderer topMidBottom;
-    private ModelRenderer baseMid;
-    private ModelRenderer baseBottom;
-
-    /*
-     * Firstly, you have to change the texture of the bottom to 3 pixels instead of 4, and you have to change the
-     * texture
-     * of the middle pillar thing to 15 instead of 14 pixels. The mapping was just wholesale fucked up
-     */
     public ModelWaystone() {
         textureWidth = 256;
         textureHeight = 256;
+        top = part(0, 0, -8, -64, -8, 16, 4, 16);
+        topMidTop = part(64, 0, -10, -60, -10, 20, 4, 20);
+        topMidBottom = part(0, 76, -14, -56, -14, 28, 4, 28);
+        topBottom = part(0, 24, -12, -52, -12, 24, 4, 24);
+        pillar = part(144, -2, -10, -48, -10, 20, 30, 20);
+        baseTop = part(96, 48, -12, -18, -12, 24, 4, 24);
+        baseMid = part(112, 76, -14, -14, -14, 28, 8, 28);
+        baseBottom = part(0, 112, -16, -6, -16, 32, 6, 32);
+    }
 
-        top = new ModelRenderer(this, 0, 0);
-        top.addBox(-8f, -64f, -8f, 16, 4, 16);
-
-        topMidTop = new ModelRenderer(this, 64, 0);
-        topMidTop.addBox(-10f, -60f, -10f, 20, 4, 20);
-
-        topMidBottom = new ModelRenderer(this, 0, 76);
-        topMidBottom.addBox(-14f, -56f, -14f, 28, 4, 28);
-
-        topBottom = new ModelRenderer(this, 0, 24);
-        topBottom.addBox(-12f, -52f, -12f, 24, 4, 24);
-
-        pillar = new ModelRenderer(this, 144, -2);
-        // pillar.addBox(-10f, -48f, -10f, 20, 28, 20);
-        pillar.addBox(-10f, -48f, -10f, 20, 30, 20);
-
-        baseTop = new ModelRenderer(this, 96, 48);
-        // baseTop.addBox(-12f, -20f, -12f, 24, 4, 24);
-        baseTop.addBox(-12f, -18f, -12f, 24, 4, 24);
-
-        baseMid = new ModelRenderer(this, 112, 76);
-        // baseMid.addBox(-14f, -16f, -14f, 28, 8, 28);
-        baseMid.addBox(-14f, -14f, -14f, 28, 8, 28);
-
-        baseBottom = new ModelRenderer(this, 0, 112);
-        // baseBottom.addBox(-16f, -8f, -16f, 32, 8, 32);
-        baseBottom.addBox(-16f, -6f, -16f, 32, 6, 32);
+    private ModelRenderer part(int u, int v, float x, float y, float z, int w, int h, int d) {
+        ModelRenderer part = new ModelRenderer(this, u, v);
+        part.addBox(x, y, z, w, h, d);
+        return part;
     }
 
     public void renderAll() {
-        float f = 0.0625f;
-        top.render(f);
-        topMidTop.render(f);
-        topMidBottom.render(f);
-        topBottom.render(f);
-        pillar.render(f);
-        baseTop.render(f);
-        baseMid.render(f);
-        baseBottom.render(f);
+        float scale = 0.0625F;
+        top.render(scale);
+        topMidTop.render(scale);
+        topMidBottom.render(scale);
+        topBottom.render(scale);
+        pillar.render(scale);
+        baseTop.render(scale);
+        baseMid.render(scale);
+        baseBottom.render(scale);
     }
 
     public void renderPillar() {
-        float f = 0.0625f;
-        pillar.render(f);
+        pillar.render(0.0625F);
     }
 }

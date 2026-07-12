@@ -1,88 +1,81 @@
 package net.blay09.mods.waystones.item;
 
-import java.util.List;
-
 import net.blay09.mods.waystones.PlayerWaystoneData;
+import net.blay09.mods.waystones.WaystoneEntry;
 import net.blay09.mods.waystones.WaystoneManager;
 import net.blay09.mods.waystones.Waystones;
-import net.blay09.mods.waystones.util.WaystoneEntry;
-import net.minecraft.client.resources.I18n;
-import net.minecraft.creativetab.CreativeTabs;
-import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.item.EnumAction;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
-import net.minecraft.util.ChatComponentTranslation;
-import net.minecraft.util.EnumChatFormatting;
-import net.minecraft.world.World;
+import net.blay09.mods.waystones.WaystoneConfig;
+import net.blay09.mods.waystones.WaystoneMessages;
+import net.blay09.mods.waystones.ClientWaystoneState;
+import net.minecraft.EntityPlayer;
+import net.minecraft.CreativeTabs;
+import net.minecraft.IconRegister;
+import net.minecraft.Item;
+import net.minecraft.ItemStack;
+import net.minecraft.Material;
+import net.minecraft.ServerPlayer;
+import net.minecraft.World;
+import net.minecraft.EnumItemInUseAction;
+import net.minecraft.EnumChatFormatting;
+import net.minecraft.I18n;
+import net.minecraft.Slot;
 
-public class ItemReturnScroll extends Item {
+import java.util.List;
 
-    public ItemReturnScroll() {
+public final class ItemReturnScroll extends Item {
+    public ItemReturnScroll(int id) {
+        super(id, Waystones.MOD_ID + ":return_scroll");
+        setMaterial(Material.paper, Material.gold, Material.ender_pearl);
         setCreativeTab(CreativeTabs.tabTools);
-        setUnlocalizedName(Waystones.MODID + ":returnScroll");
-        setTextureName(Waystones.MODID + ":returnScroll");
     }
 
     @Override
-    public int getMaxItemUseDuration(ItemStack itemStack) {
+    public void registerIcons(IconRegister register) {
+        itemIcon = register.registerIcon(Waystones.MOD_ID + ":return_scroll");
+    }
+
+    @Override
+    public boolean onItemRightClick(EntityPlayer player, float partialTick, boolean ctrlIsDown) {
+        WaystoneEntry target = player.onClient()
+                ? ClientWaystoneState.getLast() : PlayerWaystoneData.getLast(player);
+        if (target == null) {
+            if (player.onServer()) {
+                WaystoneMessages.send(player, "message.waystones.none_activated");
+            }
+            return true;
+        }
+        player.setHeldItemInUse();
+        if (player.onClient() && WaystoneConfig.sounds) {
+            player.worldObj.playSoundAtEntity(player, "portal.trigger", 1.0F, 2.0F);
+        }
+        return true;
+    }
+
+    @Override
+    public int getMaxItemUseDuration(ItemStack stack) {
         return 32;
     }
 
     @Override
-    public EnumAction getItemUseAction(ItemStack itemStack) {
-        return EnumAction.bow;
+    public EnumItemInUseAction getItemInUseAction(ItemStack stack, EntityPlayer player) {
+        return EnumItemInUseAction.BOW;
     }
 
     @Override
-    public ItemStack onEaten(ItemStack itemStack, World world, EntityPlayer player) {
-        if (!world.isRemote) {
-            WaystoneEntry lastEntry = PlayerWaystoneData.getLastWaystone(player);
-            if (lastEntry != null) {
-                if (WaystoneManager.teleportToWaystone(player, lastEntry)) {
-                    if (!player.capabilities.isCreativeMode) {
-                        itemStack.stackSize--;
-                    }
-                }
-            }
+    public void onItemUseFinish(ItemStack stack, World world, EntityPlayer player) {
+        if (player.onServer() && player instanceof ServerPlayer serverPlayer) {
+            WaystoneManager.requestReturnConfirmation(serverPlayer, true, false);
         }
-        return itemStack;
-    }
-
-    @Override
-    public ItemStack onItemRightClick(ItemStack itemStack, World world, EntityPlayer player) {
-        if (PlayerWaystoneData.getLastWaystone(player) != null) {
-            if (!player.isUsingItem() && world.isRemote) {
-                Waystones.proxy.playSound("portal.trigger", 2f);
-            }
-            player.setItemInUse(itemStack, getMaxItemUseDuration(itemStack));
-        } else {
-            ChatComponentTranslation chatComponent = new ChatComponentTranslation("waystones:scrollNotBound");
-            chatComponent.getChatStyle()
-                .setColor(EnumChatFormatting.RED);
-            Waystones.proxy.printChatMessage(3, chatComponent);
-        }
-        return itemStack;
-    }
-
-    @Override
-    public boolean onItemUse(ItemStack itemStack, EntityPlayer player, World world, int x, int y, int z, int side,
-        float hitX, float hitY, float hitZ) {
-        return false;
     }
 
     @Override
     @SuppressWarnings("unchecked")
-    public void addInformation(ItemStack itemStack, EntityPlayer player, List list, boolean debug) {
-        WaystoneEntry lastEntry = PlayerWaystoneData.getLastWaystone(player);
-        if (lastEntry != null) {
-            list.add(
-                EnumChatFormatting.GRAY
-                    + I18n.format("tooltip.waystones:boundTo", EnumChatFormatting.DARK_AQUA + lastEntry.getName()));
-        } else {
-            list.add(
-                EnumChatFormatting.GRAY
-                    + I18n.format("tooltip.waystones:boundTo", I18n.format("tooltip.waystones:none")));
-        }
+    public void addInformation(ItemStack stack, EntityPlayer player, List tooltip, boolean debug, Slot slot) {
+        WaystoneEntry target = ClientWaystoneState.getLast();
+        String name = target == null
+                ? I18n.getString("tooltip.waystones.none")
+                : EnumChatFormatting.DARK_AQUA + target.name();
+        tooltip.add(EnumChatFormatting.GRAY
+                + I18n.getStringParams("tooltip.waystones.bound_to", name));
     }
 }
